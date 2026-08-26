@@ -1,0 +1,23 @@
+# 依赖
+node_modules/
+
+# 构建产物与缓存
+release/
+electron-builder-cache/
+dist/
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志与临时
+*.log
+npm-debug.log*
+*.tmp

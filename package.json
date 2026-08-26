@@ -1,0 +1,43 @@
+{
+  "name": "markdown-word-converter",
+  "version": "1.1.0",
+  "description": "将 AI 回复的 Markdown 一键转换为带格式的富文本，粘贴到 Word 后样式完整保留。",
+  "main": "main.js",
+  "author": "Markdown2Word",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.markdown2word.converter",
+    "productName": "Markdown-Word转换器",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "build/icon.ico"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Markdown-Word转换器"
+    }
+  }
+}
