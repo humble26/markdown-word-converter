@@ -10,7 +10,7 @@ set "ELECTRON_BUILDER_CACHE=%~dp0electron-builder-cache"
 set "ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/"
 set "ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/"
 
-call npx electron-builder --win
+call npx electron-builder --win --publish never
 
 echo.
 if exist "%ELECTRON_BUILDER_CACHE%\nsis\tmp\*.exe" echo Íê³É
