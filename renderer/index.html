@@ -71,6 +71,17 @@
   }
   .btn-primary:hover { background: var(--primary-hover); }
   .btn:active { transform: translateY(1px); }
+  select.fmt-select {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  select.fmt-select:focus { outline: none; border-color: var(--primary); }
   main { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; height: calc(100vh - 110px); }
   .pane { padding: 12px 16px; background: var(--panel); overflow: hidden; display: flex; flex-direction: column; }
   .pane-left { border-right: 1px solid var(--border); }
@@ -163,6 +174,10 @@
 <div class="toolbar">
   <button class="btn btn-primary" id="btnCopy">复制富文本（Ctrl+Shift+C）</button>
   <button class="btn" id="btnExportWord">导出 Word 文档</button>
+  <select class="fmt-select" id="exportFormat" title="选择导出格式">
+    <option value="docx">.docx 原生格式（推荐）</option>
+    <option value="doc">.doc 兼容格式</option>
+  </select>
   <button class="btn" id="btnCopyPlain">复制纯文本</button>
   <span class="char-count" id="charCount"></span>
 </div>
@@ -180,6 +195,7 @@
 
 <div id="toast"></div>
 
+<script src="docxgen.js"></script>
 <script>
 "use strict";
 
@@ -188,15 +204,40 @@ function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function decodeHtml(s) {
+  return String(s).replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&');
+}
+
+// 过滤 javascript:/data:/vbscript: 等危险协议，避免自注入与导出到 Word 的风险
+function safeUrl(url) {
+  const raw = decodeHtml(url).trim();
+  if (/^(javascript|data|vbscript):/i.test(raw)) return null;
+  return url;
+}
+
+// 清洗为合法 Windows 文件名，空结果回落默认名
+function sanitizeFilename(name) {
+  const clean = String(name || '')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
+    .replace(/\s+/g, ' ').trim()
+    .replace(/[. ]+$/g, '');
+  return clean || '导出文档';
+}
+
 function inline(text) {
   let t = escapeHtml(text);
   const inter = [];
   t = t.replace(/`([^`]+)`/g, function (m, c) { inter.push('<code>' + c + '</code>'); return '\u0000' + (inter.length - 1) + '\u0000'; });
   t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;?([^&]*?)&quot;?)?\)/g, function (m, a, u, title) {
-    return '<img src="' + u + '" alt="' + a + '"' + (title ? ' title="' + title + '"' : '') + '>';
+    const safe = safeUrl(u);
+    if (safe == null) return '<span title="[图片链接已拦截]">' + (a || '') + '</span>';
+    return '<img src="' + safe + '" alt="' + a + '"' + (title ? ' title="' + title + '"' : '') + '>';
   });
   t = t.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;?([^&]*?)&quot;?)?\)/g, function (m, tx, u, title) {
-    return '<a href="' + u + '"' + (title ? ' title="' + title + '"' : '') + '>' + inline(tx) + '</a>';
+    const safe = safeUrl(u);
+    const label = inline(decodeHtml(tx));
+    if (safe == null) return label;
+    return '<a href="' + safe + '"' + (title ? ' title="' + title + '"' : '') + '>' + label + '</a>';
   });
   t = t.replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, '<strong>$1$2</strong>');
   t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)|\b_([^_]+)_\b/g, function (m, p, a, b) { return (p || '') + '<em>' + (a || b) + '</em>'; });
@@ -205,20 +246,52 @@ function inline(text) {
   return t;
 }
 
+/* 表格分隔行（|---|:--:| 或 --- | --- 两种写法都识别） */
+function isDelimRow(line) {
+  return line.indexOf('-') >= 0 && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(line);
+}
+function delimCellCount(line) {
+  return line.replace(/^\s*\||\|\s*$/g, '').split('|').length;
+}
+
+/* 按缩进把连续的列表行还原成嵌套的 ul / ol */
+function buildList(items) {
+  let html = '';
+  const stack = [];
+  for (let n = 0; n < items.length; n++) {
+    const it = items[n];
+    const type = it.ordered ? 'ol' : 'ul';
+    while (stack.length && it.indent < stack[stack.length - 1].indent) {
+      html += '</li></' + stack.pop().type + '>';
+    }
+    if (!stack.length || it.indent > stack[stack.length - 1].indent) {
+      html += '<' + type + '>';
+      stack.push({ type: type, indent: it.indent });
+      html += '<li>' + inline(it.text);
+    } else {
+      const top = stack[stack.length - 1];
+      if (top.type !== type) {
+        html += '</li></' + top.type + '><' + type + '>';
+        top.type = type;
+      } else {
+        html += '</li>';
+      }
+      html += '<li>' + inline(it.text);
+    }
+  }
+  while (stack.length) html += '</li></' + stack.pop().type + '>';
+  return html;
+}
+
 function renderBlocks(lines) {
   const out = [];
   let i = 0;
-  let inList = null;
-  let listItems = [];
-  const closeList = function () {
-    if (inList) { out.push('<' + inList + '>' + listItems.join('') + '</' + inList + '>'); inList = null; listItems = []; }
-  };
+  const listRe = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
   while (i < lines.length) {
     const line = lines[i];
-    if (!line.trim() || line.trim() === '\u200b') { closeList(); i++; continue; }
+    if (!line.trim() || line.trim() === '\u200b') { i++; continue; }
     const fence = line.match(/^```([\w+-]*)?\s*$/);
     if (fence) {
-      closeList();
       const buf = [];
       i++;
       while (i < lines.length && !/^```\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
@@ -227,52 +300,63 @@ function renderBlocks(lines) {
       continue;
     }
     const h = line.match(/^(#{1,6})\s+(.*)$/);
-    if (h) { closeList(); const n = h[1].length; out.push('<h' + n + '>' + inline(h[2]) + '</h' + n + '>'); i++; continue; }
-    if (/^(---|\*\*\*|___)\s*$/.test(line)) { closeList(); out.push('<hr>'); i++; continue; }
-    if (line.trim().indexOf('|') >= 0 && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?[\s:|-]*\|\s*$/.test(lines[i+1]) && lines[i+1].indexOf('-') >= 0) {
-      closeList();
+    if (h) { const n = h[1].length; out.push('<h' + n + '>' + inline(h[2]) + '</h' + n + '>'); i++; continue; }
+    if (/^(---|\*\*\*|___)\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
+    if (line.trim().indexOf('|') >= 0 && i + 1 < lines.length && isDelimRow(lines[i + 1])) {
       const headerCells = line.replace(/^\s*\||\|\s*$/g, '').split('|').map(function (c) { return c.trim(); });
-      i += 2;
-      const rows = [];
-      while (i < lines.length && lines[i].trim() && lines[i].trim().indexOf('|') >= 0) {
-        rows.push(lines[i].replace(/^\s*\||\|\s*$/g, '').split('|').map(function (c) { return c.trim(); }));
-        i++;
+      // 分隔行列数须与表头一致，否则视为普通段落，避免把含 | 的句子误判为表格
+      if (delimCellCount(lines[i + 1]) === headerCells.length) {
+        i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].trim() && lines[i].trim().indexOf('|') >= 0) {
+          rows.push(lines[i].replace(/^\s*\||\|\s*$/g, '').split('|').map(function (c) { return c.trim(); }));
+          i++;
+        }
+        let html = '<table><thead><tr>';
+        headerCells.forEach(function (c) { html += '<th>' + inline(c) + '</th>'; });
+        html += '</tr></thead><tbody>';
+        rows.forEach(function (r) {
+          html += '<tr>';
+          for (let k = 0; k < headerCells.length; k++) { html += '<td>' + inline(r[k] || '') + '</td>'; }
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+        out.push(html);
+        continue;
       }
-      let html = '<table><thead><tr>';
-      headerCells.forEach(function (c) { html += '<th>' + inline(c) + '</th>'; });
-      html += '</tr></thead><tbody>';
-      rows.forEach(function (r) {
-        html += '<tr>';
-        for (let k = 0; k < headerCells.length; k++) { html += '<td>' + inline(r[k] || '') + '</td>'; }
-        html += '</tr>';
-      });
-      html += '</tbody></table>';
-      out.push(html);
-      continue;
     }
     if (/^>\s?/.test(line)) {
-      closeList();
       const buf = [];
       while (i < lines.length && /^>\s?/.test(lines[i])) { buf.push(lines[i].replace(/^>\s?/, '')); i++; }
       out.push('<blockquote>' + renderBlocks(buf) + '</blockquote>');
       continue;
     }
-    const ul = line.match(/^\s*([-*+])\s+(.+)$/);
-    if (ul) { if (inList !== 'ul') { closeList(); inList = 'ul'; } listItems.push('<li>' + inline(ul[2]) + '</li>'); i++; continue; }
-    const ol = line.match(/^\s*(\d+)[.)]\s+(.+)$/);
-    if (ol) { if (inList !== 'ol') { closeList(); inList = 'ol'; } listItems.push('<li>' + inline(ol[2]) + '</li>'); i++; continue; }
-    closeList();
+    const lm = line.match(listRe);
+    if (lm) {
+      const items = [];
+      while (i < lines.length) {
+        const m = lines[i].match(listRe);
+        if (!m) break;
+        items.push({
+          indent: m[1].replace(/\t/g, '    ').length,
+          ordered: /^\d/.test(m[2]),
+          text: m[3]
+        });
+        i++;
+      }
+      out.push(buildList(items));
+      continue;
+    }
     const buf = [line];
     i++;
     while (i < lines.length && lines[i].trim()
         && !/^```/.test(lines[i]) && !/^#{1,6}\s/.test(lines[i])
         && !/^(---|\*\*\*|___)\s*$/.test(lines[i]) && !/^>\s?/.test(lines[i])
-        && !/^([-*+]|\d+[.)])\s+/.test(lines[i]) && lines[i].trim().indexOf('|') < 0) {
+        && !listRe.test(lines[i]) && lines[i].trim().indexOf('|') < 0) {
       buf.push(lines[i]); i++;
     }
     out.push('<p>' + inline(buf.join(' ')) + '</p>');
   }
-  closeList();
   return out.join('\n');
 }
 
@@ -391,13 +475,43 @@ function legacyPlainCopy(plain) {
   showToast('已复制纯文本（无格式）', true);
 }
 
-/* 导出 Word 文档：桌面版调用原生保存对话框，网页版用 Blob 下载 */
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* 导出 Word 文档：docx 为原生 OOXML 格式；doc 为 HTML 兼容格式。
+   桌面版调用原生保存对话框，网页版用 Blob 下载。 */
 async function exportWord() {
   const text = input.value.trim();
   if (!text) { showToast('请先粘贴或输入 Markdown 内容'); return; }
-  const fullHtml = wrapWordHtml(injectInlineCss(currentHtml));
-  const defaultName = (text.match(/^#{1,6}\s+(.+)$/m) || [, '导出文档'])[1].trim().slice(0, 40);
+  const sel = document.getElementById('exportFormat');
+  const fmt = sel ? sel.value : 'docx';
+  const defaultName = sanitizeFilename((text.match(/^#{1,6}\s+(.+)$/m) || [, '导出文档'])[1]).slice(0, 40) || '导出文档';
 
+  if (fmt === 'docx') {
+    if (!window.docxgen) { showToast('docx 生成模块未加载，请改用 .doc 格式'); return; }
+    let bytes;
+    try { bytes = window.docxgen.build(currentHtml); }
+    catch (e) { showToast('生成 .docx 失败：' + e.message); return; }
+
+    if (window.desktopAPI && window.desktopAPI.saveDocx) {
+      try {
+        const res = await window.desktopAPI.saveDocx(defaultName, window.docxgen.toBase64(bytes));
+        if (res.saved) showToast('Word 文档已保存 ✅ ' + res.path, true);
+        return;
+      } catch (e) { /* 回退到浏览器下载 */ }
+    }
+    downloadBlob(new Blob([bytes], { type: window.docxgen.mime }), defaultName + '.docx');
+    showToast('Word 文档已下载 ✅（.docx 原生格式）', true);
+    return;
+  }
+
+  const fullHtml = wrapWordHtml(injectInlineCss(currentHtml));
   if (window.desktopAPI && window.desktopAPI.saveDoc) {
     try {
       const res = await window.desktopAPI.saveDoc(defaultName, fullHtml);
@@ -405,14 +519,8 @@ async function exportWord() {
       return;
     } catch (e) { /* 回退到浏览器下载 */ }
   }
-  const blob = new Blob(['\ufeff' + fullHtml], { type: 'application/msword' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = defaultName + '.doc';
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('Word 文档已下载 ✅', true);
+  downloadBlob(new Blob(['\ufeff' + fullHtml], { type: 'application/msword' }), defaultName + '.doc');
+  showToast('Word 文档已下载 ✅（.doc 兼容格式）', true);
 }
 
 document.getElementById('btnCopy').addEventListener('click', copyRich);

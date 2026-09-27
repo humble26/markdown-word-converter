@@ -1,7 +1,7 @@
 {
   "name": "markdown-word-converter",
-  "version": "1.1.0",
-  "description": "将 AI 回复的 Markdown 一键转换为带格式的富文本，粘贴到 Word 后样式完整保留。",
+  "version": "1.2.1",
+  "description": "将 AI 回复的 Markdown 一键转换为带格式的富文本，粘贴到 Word 后样式完整保留，并可导出 .docx 原生 Word 文档。",
   "main": "main.js",
   "author": "Markdown2Word",
   "license": "MIT",
@@ -29,7 +29,8 @@
       "target": [
         { "target": "nsis", "arch": ["x64"] }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,

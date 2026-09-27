@@ -1,8 +1,7 @@
 @echo off
-chcp 65001 >nul
-title ç”Ÿæˆ Markdown-Word è½¬æ¢å™¨å®‰è£…åŒ…
+title Éú³É Markdown-Word ×ª»»Æ÷°²×°°ü
 echo.
-echo  æ­£åœ¨ç”Ÿæˆå®‰è£…åŒ…ï¼Œè¯·å‹¿å…³é—­æœ¬çª—å£...
+echo  ÕıÔÚÉú³É°²×°°ü£¬ÇëÎğ¹Ø±Õ±¾´°¿Ú...
 echo.
 
 cd /d "%~dp0"
@@ -14,9 +13,9 @@ set "ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/"
 call npx electron-builder --win
 
 echo.
-if exist "%ELECTRON_BUILDER_CACHE%\nsis\tmp\*.exe" echo å®Œæˆ
+if exist "%ELECTRON_BUILDER_CACHE%\nsis\tmp\*.exe" echo Íê³É
 dir /s /b "%~dp0release\*.exe" 2>nul
 echo.
-echo å®‰è£…åŒ…å·²ç”Ÿæˆåˆ° release æ–‡ä»¶å¤¹ï¼ˆSetup å‰ç¼€çš„ .exe å³ä¸ºå®‰è£…ç¨‹åºï¼‰ã€‚
+echo °²×°°üÒÑÉú³Éµ½ release ÎÄ¼ş¼Ğ£¨Setup Ç°×ºµÄ .exe ¼´Îª°²×°³ÌĞò£©¡£
 echo.
 pause

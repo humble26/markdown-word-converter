@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown → Word 转换器 · 安装与使用指南</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --panel: #ffffff;
+    --border: #e3e6ea;
+    --text: #1f2430;
+    --muted: #7a8290;
+    --primary: #2f6fed;
+    --primary-light: #eef3ff;
+    --code-bg: #f1f3f7;
+    --success: #1aa06a;
+    --warn: #e8923c;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+  }
+  .hero {
+    background: linear-gradient(135deg, #2f6fed 0%, #6f4ff2 100%);
+    color: #fff;
+    padding: 56px 24px 44px;
+    text-align: center;
+  }
+  .hero .badge {
+    display: inline-block;
+    background: rgba(255,255,255,.18);
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    margin-bottom: 16px;
+    letter-spacing: .5px;
+  }
+  .hero h1 { margin: 0 0 8px; font-size: 30px; font-weight: 700; }
+  .hero p { margin: 0; font-size: 15px; opacity: .9; }
+  .container { max-width: 860px; margin: 0 auto; padding: 0 20px; }
+  .content { padding: 36px 0 60px; }
+  section { margin-bottom: 44px; }
+  h2 {
+    font-size: 21px; font-weight: 700; margin: 0 0 18px;
+    padding-bottom: 10px; border-bottom: 2px solid var(--primary);
+    display: inline-block;
+  }
+  h3 { font-size: 16px; font-weight: 600; margin: 24px 0 12px; color: var(--primary); }
+  p { margin: 10px 0; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 26px;
+    margin: 16px 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  }
+  .card.tip { border-left: 4px solid var(--success); }
+  .card.warn { border-left: 4px solid var(--warn); }
+  .card.note { border-left: 4px solid var(--primary); }
+  .card .label { font-weight: 600; font-size: 13px; }
+  .card.tip .label { color: var(--success); }
+  .card.warn .label { color: var(--warn); }
+  .card.note .label { color: var(--primary); }
+  ol, ul { padding-left: 22px; }
+  li { margin: 7px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: .9em;
+  }
+  pre {
+    background: #1e2533;
+    color: #dfe6f0;
+    padding: 16px 18px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps > li {
+    counter-increment: step;
+    position: relative;
+    padding: 10px 0 10px 48px;
+    border-bottom: 1px solid #eef0f4;
+  }
+  .steps > li:last-child { border-bottom: none; }
+  .steps > li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: 8px;
+    width: 30px; height: 30px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 10px 14px; text-align: left; }
+  th { background: var(--primary-light); font-weight: 600; }
+  .tag {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 600; margin-right: 6px;
+  }
+  .tag-green { background: #e6f7ef; color: var(--success); }
+  .tag-blue { background: var(--primary-light); color: var(--primary); }
+  .tag-orange { background: #fdf0e3; color: var(--warn); }
+  .kbd {
+    display: inline-block; padding: 1px 8px; border: 1px solid #ccc;
+    border-bottom-width: 2px; border-radius: 4px;
+    font-family: monospace; font-size: 12px; background: #fafafa;
+  }
+  footer {
+    text-align: center; padding: 28px 20px;
+    color: var(--muted); font-size: 13px;
+    border-top: 1px solid var(--border);
+  }
+  .toc {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 26px; margin-bottom: 36px;
+  }
+  .toc h4 { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+  .toc ol { padding-left: 20px; margin: 0; }
+  .toc a { color: var(--primary); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="badge">v1.2.1 · Windows</div>
+  <h1>Markdown → Word 转换器</h1>
+  <p>安装与使用指南</p>
+</div>
+
+<div class="container">
+<div class="content">
+
+<div class="toc">
+  <h4>目录</h4>
+  <ol>
+    <li><a href="#intro">简介与版本对比</a></li>
+    <li><a href="#web">网页版使用</a></li>
+    <li><a href="#portable">桌面版 · 绿色便携版</a></li>
+    <li><a href="#installer">桌面版 · 安装程序</a></li>
+    <li><a href="#dev">从源码构建</a></li>
+    <li><a href="#usage">使用教程</a></li>
+    <li><a href="#faq">常见问题</a></li>
+  </ol>
+</div>
+
+<!-- 1. 简介 -->
+<section id="intro">
+  <h2>一、简介与版本对比</h2>
+  <p>本工具用于将 AI（如 ChatGPT、Claude、DeepSeek 等）回复的 Markdown 内容，一键转换为带格式的富文本，粘贴到 Microsoft Word 后标题层级、加粗、斜体、列表、表格、代码块、引用等样式完整保留。</p>
+
+  <table>
+    <tr><th>版本</th><th>文件</th><th>适用场景</th><th>安装要求</th></tr>
+    <tr>
+      <td><span class="tag tag-green">网页版</span></td>
+      <td><code>markdown-word 转换器.html</code></td>
+      <td>临时使用、不想安装任何软件</td>
+      <td>仅需浏览器</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-blue">便携版</span></td>
+      <td><code>Markdown-Word 转换器-绿色版.zip</code></td>
+      <td>免安装、解压即用</td>
+      <td>Windows 10/11</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-orange">安装版</span></td>
+      <td><code>Markdown-Word转换器 Setup 1.0.0.exe</code></td>
+      <td>长期使用、需要桌面快捷方式</td>
+      <td>Windows 10/11</td>
+    </tr>
+  </table>
+
+  <div class="card note">
+    <div class="label">核心原理</div>
+    <p>普通复制只能得到纯文本，格式会丢失。本工具将 Markdown 解析为 HTML 后，通过系统剪贴板写入 <code>text/html</code> 富文本格式。Word 识别该格式并还原样式。桌面版使用 Electron 原生剪贴板 API，格式还原比网页版更可靠。</p>
+  </div>
+</section>
+
+<!-- 2. 网页版 -->
+<section id="web">
+  <h2>二、网页版使用</h2>
+  <div class="card">
+    <h3>步骤</h3>
+    <ol class="steps">
+      <li>双击 <code>markdown-word 转换器.html</code>，用浏览器打开</li>
+      <li>将 AI 回复的 Markdown 内容粘贴到左侧输入框</li>
+      <li>右侧自动实时预览转换效果</li>
+      <li>点击「复制富文本」按钮，或按 <span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">C</span></li>
+      <li>打开 Word，按 <span class="kbd">Ctrl</span>+<span class="kbd">V</span> 粘贴，格式完整保留</li>
+    </ol>
+  </div>
+  <div class="card tip">
+    <div class="label">提示</div>
+    <p>网页版无需安装、离线可用（首次打开后浏览器会缓存），适合临时场景。但部分浏览器可能限制剪贴板写入 HTML，如复制后 Word 中格式不全，请使用桌面版。</p>
+  </div>
+</section>
+
+<!-- 3. 便携版 -->
+<section id="portable">
+  <h2>三、桌面版 · 绿色便携版</h2>
+  <div class="card">
+    <h3>安装步骤</h3>
+    <ol class="steps">
+      <li>获取 <code>Markdown-Word 转换器-绿色版.zip</code> 压缩包</li>
+      <li>右键 →「全部解压缩」，解压到任意目录（如桌面或 <code>D:\Apps\</code>）</li>
+      <li>进入解压后的文件夹</li>
+      <li>双击 <code>Markdown-WordConverter.exe</code> 即可启动</li>
+    </ol>
+  </div>
+  <div class="card tip">
+    <div class="label">优势</div>
+    <p>免安装、不写注册表、不生成系统垃圾，可放入 U 盘随身携带。删除时直接删掉整个文件夹即可。</p>
+  </div>
+</section>
+
+<!-- 4. 安装程序 -->
+<section id="installer">
+  <h2>四、桌面版 · 安装程序</h2>
+  <div class="card">
+    <h3>安装步骤</h3>
+    <ol class="steps">
+      <li>双击运行 <code>Markdown-Word转换器 Setup 1.0.0.exe</code></li>
+      <li>如出现 Windows SmartScreen 提示，点击「更多信息」→「仍要运行」（应用未签名，属正常）</li>
+      <li>选择安装路径（默认 <code>%LOCALAPPDATA%\Programs\</code> 下），点击「下一步」</li>
+      <li>选择是否创建桌面快捷方式和开始菜单快捷方式</li>
+      <li>点击「安装」，等待数秒完成</li>
+      <li>点击「完成」退出安装向导</li>
+    </ol>
+  </div>
+  <div class="card">
+    <h3>卸载方式</h3>
+    <ul>
+      <li><b>方式一</b>：开始菜单 → 找到「Markdown-Word转换器」→ 右键 → 卸载</li>
+      <li><b>方式二</b>：设置 → 应用 → 已安装的应用 → 搜索「Markdown-Word」→ 卸载</li>
+      <li><b>方式三</b>：安装目录下运行 <code>Uninstall Markdown-WordConverter.exe</code></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 5. 从源码构建 -->
+<section id="dev">
+  <h2>五、从源码构建</h2>
+  <div class="card">
+    <h3>环境要求</h3>
+    <ul>
+      <li>Node.js v18+（推荐 v22）</li>
+      <li>npm v10+</li>
+      <li>Windows 10/11（打包目标）</li>
+    </ul>
+    <h3>步骤</h3>
+    <pre><code># 1. 进入项目目录
+cd markdown-word-desktop
+
+# 2. 安装依赖
+npm install
+
+# 3. 开发模式运行（调试用）
+npm start
+
+# 4. 打包为安装程序（需管理员权限）
+npx electron-builder --win
+
+# 5. 产物在 release/ 目录
+#    - win-unpacked\         未打包的应用目录（可直接运行）
+#    - ...Setup 1.0.0.exe    NSIS 安装程序</code></pre>
+  </div>
+  <div class="card warn">
+    <div class="label">注意</div>
+    <p>打包安装程序时，<code>electron-builder</code> 需要创建符号链接，这要求当前账户有 <code>SeCreateSymbolicLink</code> 权限。如果当前账户为「过滤管理员」，请<b>以管理员身份运行</b> <code>build-installer.cmd</code>，或开启 Windows「开发者模式」。</p>
+  </div>
+</section>
+
+<!-- 6. 使用教程 -->
+<section id="usage">
+  <h2>六、使用教程</h2>
+  <div class="card">
+    <h3>基本操作</h3>
+    <ol class="steps">
+      <li>启动应用（或打开网页版）</li>
+      <li>在 AI 对话窗口中复制回复的 Markdown 文本</li>
+      <li>在转换器左侧输入框粘贴（<span class="kbd">Ctrl</span>+<span class="kbd">V</span>）</li>
+      <li>右侧实时显示格式预览，确认效果</li>
+      <li>选择输出方式：
+        <ul>
+          <li><b>复制富文本</b>：点击按钮 → 切换到 Word → <span class="kbd">Ctrl</span>+<span class="kbd">V</span> 粘贴</li>
+          <li><b>导出 Word 文档</b>：点击按钮 → 选择保存位置 → 直接生成 .doc 文件</li>
+        </ul>
+      </li>
+    </ol>
+  </div>
+  <div class="card tip">
+    <div class="label">导出 Word 文档</div>
+    <p>点击工具栏「导出 Word 文档」按钮，可直接生成 .doc 文件保存到本地，无需手动复制粘贴。桌面版弹出系统保存对话框让你选择路径；网页版则由浏览器直接下载。文件名自动从 Markdown 首个标题提取，无标题时默认为「导出文档」。</p>
+  </div>
+  <div class="card">
+    <h3>支持的 Markdown 元素</h3>
+    <table>
+      <tr><th>元素</th><th>Markdown 语法</th><th>Word 中的效果</th></tr>
+      <tr><td>标题</td><td><code># 标题一</code> / <code>## 标题二</code></td><td>大号加粗标题</td></tr>
+      <tr><td>加粗</td><td><code>**文字**</code></td><td>加粗文字</td></tr>
+      <tr><td>斜体</td><td><code>*文字*</code></td><td>斜体文字</td></tr>
+      <tr><td>删除线</td><td><code>~~文字~~</code></td><td>删除线文字</td></tr>
+      <tr><td>无序列表</td><td><code>- 项目</code></td><td>项目符号列表</td></tr>
+      <tr><td>有序列表</td><td><code>1. 项目</code></td><td>编号列表</td></tr>
+      <tr><td>引用</td><td><code>&gt; 引用文字</code></td><td>缩进引用块</td></tr>
+      <tr><td>代码块</td><td><code>```语言 ... ```</code></td><td>深色背景代码块</td></tr>
+      <tr><td>行内代码</td><td><code>`代码`</code></td><td>灰底等宽字体</td></tr>
+      <tr><td>表格</td><td><code>| 列 | 列 |</code></td><td>带边框表格</td></tr>
+      <tr><td>链接</td><td><code>[文字](URL)</code></td><td>蓝色超链接</td></tr>
+      <tr><td>分割线</td><td><code>---</code></td><td>水平横线</td></tr>
+    </table>
+  </div>
+  <div class="card tip">
+    <div class="label">快捷键</div>
+    <ul>
+      <li><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">C</span> — 复制富文本（最常用）</li>
+      <li>「导出 Word 文档」按钮 — 直接生成 .doc 文件保存到本地</li>
+      <li>「复制纯文本」按钮 — 仅复制无格式文本</li>
+      <li>「插入示例」按钮 — 加载演示内容，快速了解效果</li>
+      <li>「清空」按钮 — 一键清空输入</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 7. FAQ -->
+<section id="faq">
+  <h2>七、常见问题</h2>
+
+  <div class="card">
+    <h3>Q1：粘贴到 Word 后格式丢失了？</h3>
+    <p><b>A：</b>请确认使用的是「复制富文本」按钮而非「复制纯文本」。若使用网页版仍丢失，可能是浏览器限制了 HTML 剪贴板写入，请改用桌面版（Electron 原生剪贴板更可靠）。在 Word 中粘贴时，若出现粘贴选项按钮，选择「保留源格式」。</p>
+  </div>
+
+  <div class="card">
+    <h3>Q2：安装程序被杀毒软件拦截？</h3>
+    <p><b>A：</b>本应用未做代码签名，部分杀毒软件会对未签名的安装包发出警告。这是正常现象，可以放心放行。如需彻底避免，需购买代码签名证书（成本较高，个人工具通常不做）。</p>
+  </div>
+
+  <div class="card">
+    <h3>Q3：Windows SmartScreen 提示"已保护你的电脑"？</h3>
+    <p><b>A：</b>点击「更多信息」→「仍要运行」即可。这是因为应用没有数字签名，Windows 对未签名程序的默认安全提示，不影响使用。</p>
+  </div>
+
+  <div class="card">
+    <h3>Q4：打包时提示"Cannot create symbolic link"？</h3>
+    <p><b>A：</b>这是因为当前账户没有创建符号链接的权限。解决方案：① 右键 <code>build-installer.cmd</code> → 以管理员身份运行；② 或在 Windows 设置中开启「开发者模式」（设置 → 隐私和安全性 → 开发者选项）。</p>
+  </div>
+
+  <div class="card">
+    <h3>Q5：代码块在 Word 里背景颜色不对？</h3>
+    <p><b>A：</b>Word 对深色背景的 HTML 渲染支持有限。代码块会显示为浅灰背景或等宽字体，不影响内容可读性。如需精确还原深色效果，建议在 Word 中手动套用代码样式。</p>
+  </div>
+
+  <div class="card">
+    <h3>Q6：能否支持 macOS 或 Linux？</h3>
+    <p><b>A：</b>当前打包仅针对 Windows。项目基于 Electron 跨平台架构，修改 <code>package.json</code> 中的 <code>build.win.target</code> 并执行 <code>npx electron-builder --mac</code> 或 <code>--linux</code> 即可生成对应平台安装包。</p>
+  </div>
+</section>
+
+</div>
+</div>
+
+<footer>
+  Markdown → Word 转换器 v1.2.1 · 基于 Electron 31 · MIT License
+</footer>
+
+</body>
+</html>
