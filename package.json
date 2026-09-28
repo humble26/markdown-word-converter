@@ -7,7 +7,8 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win",
+    "test": "node --test tests/main-security.test.js"
   },
   "devDependencies": {
     "electron": "^31.7.7",
