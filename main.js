@@ -1,7 +1,6 @@
 const { app, BrowserWindow, clipboard, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { pathToFileURL } = require('url');
 
 const RENDERER_DIR = path.join(__dirname, 'renderer');
 
