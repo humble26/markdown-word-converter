@@ -1,6 +1,6 @@
 {
   "name": "markdown-word-converter",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "将 AI 回复的 Markdown 一键转换为带格式的富文本，粘贴到 Word 后样式完整保留，并可导出 .docx 原生 Word 文档。",
   "main": "main.js",
   "author": "Markdown2Word",
