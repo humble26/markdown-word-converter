@@ -1,6 +1,6 @@
 {
   "name": "markdown-word-converter",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "将 AI 回复的 Markdown 一键转换为带格式的富文本，粘贴到 Word 后样式完整保留，并可导出 .docx 原生 Word 文档。",
   "main": "main.js",
   "author": "Markdown2Word",
@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win",
-    "test": "node --test tests/main-security.test.js"
+    "test": "node --test tests/main-security.test.js tests/texconv.test.js tests/texconv-doc.test.js tests/math-pipeline.test.js"
   },
   "devDependencies": {
     "electron": "^31.7.7",

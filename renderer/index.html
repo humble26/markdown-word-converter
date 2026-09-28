@@ -147,6 +147,14 @@
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   #toast.success { background: var(--success); }
 
+  /* 数学公式预览：MathML 交给浏览器原生渲染，这里只管排版与降级样式 */
+  .math-inline { display: inline-block; vertical-align: middle; }
+  .math-block { display: block; text-align: center; margin: 10px 0; overflow-x: auto; }
+  .math-fallback { color: #b3261e; font-family: Consolas, monospace; font-size: 0.92em; }
+  #preview math { font-size: 1.08em; }
+  /* 拖入文件时的视觉提示 */
+  body.dragging .pane { outline: 2px dashed #4a6cf7; outline-offset: -6px; border-radius: 8px; }
+
   @media (max-width: 820px) {
     main { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr 1fr; height: auto; min-height: calc(100vh - 110px); }
     .pane-left { border-right: none; border-bottom: 1px solid var(--border); }
@@ -177,7 +185,9 @@
   <select class="fmt-select" id="exportFormat" title="选择导出格式">
     <option value="docx">.docx 原生格式（推荐）</option>
     <option value="doc">.doc 兼容格式</option>
+    <option value="tex">.tex LaTeX 源码</option>
   </select>
+  <button class="btn" id="btnImportTex" title="打开 .tex 文件并转换为 Markdown（也可以直接把文件拖进窗口）">导入 .tex</button>
   <button class="btn" id="btnCopyPlain">复制纯文本</button>
   <span class="char-count" id="charCount"></span>
 </div>
@@ -196,6 +206,7 @@
 <div id="toast"></div>
 
 <script src="docxgen.js"></script>
+<script src="texconv.js"></script>
 <script>
 "use strict";
 
@@ -224,9 +235,34 @@ function sanitizeFilename(name) {
   return clean || '导出文档';
 }
 
+/* 公式 → 预览 HTML：MathML 交给浏览器原生渲染；
+   data-tex 保留原始 LaTeX，导出 .docx 时 docxgen 用它生成 Word 公式（OMML）。 */
+function renderMathHTML(tex, block) {
+  const cls = block ? 'math-block' : 'math-inline';
+  const tag = block ? 'div' : 'span';
+  const attr = String(tex).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let inner = '';
+  if (window.texconv) {
+    try { inner = window.texconv.mathToMathML(tex, !!block); } catch (e) { inner = ''; }
+  }
+  if (!inner) {
+    /* 转换失败就把 LaTeX 原文摆出来 —— 降级显示好过静默丢内容 */
+    return '<' + tag + ' class="' + cls + ' math-fallback" data-tex="' + attr + '">' + escapeHtml(tex) + '</' + tag + '>';
+  }
+  return '<' + tag + ' class="' + cls + '" data-tex="' + attr + '">' + inner + '</' + tag + '>';
+}
+
 function inline(text) {
-  let t = escapeHtml(text);
   const inter = [];
+  let t = String(text);
+
+  /* 公式最先摘出来：$..$ 内容既不能走 HTML 转义，也不能被后面的强调规则误伤 */
+  t = t.replace(/\$([^$\n]+?)\$/g, function (m, tex) {
+    inter.push(renderMathHTML(tex, false));
+    return '\u0000' + (inter.length - 1) + '\u0000';
+  });
+
+  t = escapeHtml(t);
   t = t.replace(/`([^`]+)`/g, function (m, c) { inter.push('<code>' + c + '</code>'); return '\u0000' + (inter.length - 1) + '\u0000'; });
   t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;?([^&]*?)&quot;?)?\)/g, function (m, a, u, title) {
     const safe = safeUrl(u);
@@ -299,6 +335,19 @@ function renderBlocks(lines) {
       out.push('<pre><code>' + escapeHtml(buf.join('\n')) + '</code></pre>');
       continue;
     }
+    /* 块级公式 $$...$$（可跨行） */
+    if (/^\s*\$\$/.test(line)) {
+      const first = line.replace(/^\s*\$\$/, '');
+      const mbuf = [];
+      if (/\$\$\s*$/.test(first)) { mbuf.push(first.replace(/\$\$\s*$/, '')); i++; }
+      else {
+        mbuf.push(first); i++;
+        while (i < lines.length && !/\$\$\s*$/.test(lines[i])) { mbuf.push(lines[i]); i++; }
+        if (i < lines.length) { mbuf.push(lines[i].replace(/\$\$\s*$/, '')); i++; }
+      }
+      out.push(renderMathHTML(mbuf.join('\n').trim(), true));
+      continue;
+    }
     const h = line.match(/^(#{1,6})\s+(.*)$/);
     if (h) { const n = h[1].length; out.push('<h' + n + '>' + inline(h[2]) + '</h' + n + '>'); i++; continue; }
     if (/^(---|\*\*\*|___)\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
@@ -352,6 +401,7 @@ function renderBlocks(lines) {
     while (i < lines.length && lines[i].trim()
         && !/^```/.test(lines[i]) && !/^#{1,6}\s/.test(lines[i])
         && !/^(---|\*\*\*|___)\s*$/.test(lines[i]) && !/^>\s?/.test(lines[i])
+        && !/^\s*\$\$/.test(lines[i])
         && !listRe.test(lines[i]) && lines[i].trim().indexOf('|') < 0) {
       buf.push(lines[i]); i++;
     }
@@ -496,7 +546,14 @@ async function exportWord() {
   if (fmt === 'docx') {
     if (!window.docxgen) { showToast('docx 生成模块未加载，请改用 .doc 格式'); return; }
     let bytes;
-    try { bytes = window.docxgen.build(currentHtml); }
+    try {
+      bytes = window.docxgen.build(currentHtml, {
+        /* 公式 → Word 原生公式（OMML）；texconv 缺席时 docxgen 自动降级显示原文 */
+        mathToOmml: window.texconv
+          ? function (tex, block) { return block ? window.texconv.mathToOmmlPara(tex) : window.texconv.mathToOmml(tex); }
+          : null
+      });
+    }
     catch (e) { showToast('生成 .docx 失败：' + e.message); return; }
 
     if (window.desktopAPI && window.desktopAPI.saveDocx) {
@@ -508,6 +565,25 @@ async function exportWord() {
     }
     downloadBlob(new Blob([bytes], { type: window.docxgen.mime }), defaultName + '.docx');
     showToast('Word 文档已下载 ✅（.docx 原生格式）', true);
+    return;
+  }
+
+  if (fmt === 'tex') {
+    if (!window.texconv) { showToast('LaTeX 转换模块未加载'); return; }
+    const r = window.texconv.mdToLatex(text, { title: defaultName });
+    if (window.desktopAPI && window.desktopAPI.saveText) {
+      try {
+        const res = await window.desktopAPI.saveText(defaultName + '.tex', r.text);
+        if (res.saved) {
+          showToast(r.warnings.length
+            ? 'LaTeX 源码已保存 ✅（' + r.warnings.length + ' 条提示见控制台）'
+            : 'LaTeX 源码已保存 ✅ ' + res.path, true);
+        }
+        return;
+      } catch (e) { /* 回退到浏览器下载 */ }
+    }
+    downloadBlob(new Blob([r.text], { type: 'text/x-tex;charset=utf-8' }), defaultName + '.tex');
+    showToast('LaTeX 源码已导出 ✅', true);
     return;
   }
 
@@ -523,11 +599,89 @@ async function exportWord() {
   showToast('Word 文档已下载 ✅（.doc 兼容格式）', true);
 }
 
+/* ============ LaTeX 导入与文件拖入识别 ============ */
+
+/* 把 .tex 内容转成 Markdown 并填入输入框（导入按钮与拖拽共用） */
+function applyTex(texText, label) {
+  if (!window.texconv) { showToast('LaTeX 转换模块未加载'); return; }
+  const r = window.texconv.latexToMd(texText);
+  input.value = r.text;
+  update();
+  const name = label || 'LaTeX';
+  if (r.warnings.length) {
+    showToast('已从 ' + name + ' 转换；' + r.warnings.length + ' 个命令未识别（已原样保留在文中）', true);
+  } else {
+    showToast('已从 ' + name + ' 转换为 Markdown ✅', true);
+  }
+}
+
+async function importTex() {
+  if (!window.texconv) { showToast('LaTeX 转换模块未加载'); return; }
+  if (!window.desktopAPI || !window.desktopAPI.openTex) {
+    showToast('网页版请直接把 .tex 文件拖进窗口');
+    return;
+  }
+  const res = await window.desktopAPI.openTex();
+  if (!res.opened) return;
+  applyTex(res.text, res.path.split(/[\\/]/).pop());
+}
+
+/* 内容嗅探：扩展名不可靠时（.txt / 无扩展名）用特征判断 */
+function looksLikeLatex(text) {
+  return /\\documentclass\b/.test(text)
+    || /\\begin\s*\{(document|itemize|enumerate|tabular|equation|align|figure|table|abstract)\}/.test(text)
+    || /\\(?:section|subsection|textbf|emph|includegraphics)\s*\{/.test(text);
+}
+
+function sniffKind(name, text) {
+  const ext = ((name.match(/\.([a-z0-9]+)$/i) || [])[1] || '').toLowerCase();
+  if (['tex', 'latex'].indexOf(ext) >= 0) return 'latex';
+  if (['md', 'markdown', 'mdx'].indexOf(ext) >= 0) return 'markdown';
+  return looksLikeLatex(text) ? 'latex' : 'markdown';
+}
+
+/* 拖入文件：自动识别类型并选择转换方向。
+   文件读取走渲染进程 File API（file.text()），不经过主进程。 */
+function setupDrag() {
+  let depth = 0;
+  document.addEventListener('dragenter', function (e) {
+    e.preventDefault();
+    depth++;
+    document.body.classList.add('dragging');
+  });
+  document.addEventListener('dragover', function (e) { e.preventDefault(); });
+  document.addEventListener('dragleave', function (e) {
+    e.preventDefault();
+    if (--depth <= 0) { depth = 0; document.body.classList.remove('dragging'); }
+  });
+  document.addEventListener('drop', async function (e) {
+    e.preventDefault();
+    depth = 0;
+    document.body.classList.remove('dragging');
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+    let text = '';
+    try { text = await file.text(); } catch (err) { showToast('读取文件失败：' + err.message); return; }
+    if (!text.trim()) { showToast('文件是空的'); return; }
+    const kind = sniffKind(file.name, text);
+    if (kind === 'latex') {
+      applyTex(text, file.name);
+    } else {
+      input.value = text;
+      update();
+      showToast('已识别为 Markdown：' + file.name + '（可导出 Word / .doc / .tex）', true);
+    }
+    preview.scrollTop = 0;
+  });
+}
+
 document.getElementById('btnCopy').addEventListener('click', copyRich);
 document.getElementById('btnExportWord').addEventListener('click', exportWord);
+document.getElementById('btnImportTex').addEventListener('click', importTex);
 document.getElementById('btnCopyPlain').addEventListener('click', copyPlain);
 document.getElementById('btnClear').addEventListener('click', function () { input.value = ''; update(); });
 document.getElementById('btnExample').addEventListener('click', function () { input.value = SAMPLE; update(); preview.scrollTop = 0; showToast('已插入示例', true); });
+setupDrag();
 document.addEventListener('keydown', function (e) {
   if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); copyRich(); }
 });
@@ -549,6 +703,10 @@ const SAMPLE = `# 项目周报
 | 日活用户 | 12,300 | 14,800 | ↑ 20% |
 | 转化率 | 3.2% | 3.8% | ↑ |
 | 崩溃率 | 0.9% | 0.3% | ↓ |
+
+转化率回归模型：$y_t = \\alpha + \\beta x_t + \\varepsilon_t$，其中：
+
+$$\\beta = \\frac{\\sum_{i=1}^{n}(x_i - \\bar{x})(y_i - \\bar{y})}{\\sum_{i=1}^{n}(x_i - \\bar{x})^2}$$
 
 > 提示：下周将进入 **性能优化** 冲刺，请各端提前准备压测环境。
 

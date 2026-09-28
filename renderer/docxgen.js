@@ -115,11 +115,41 @@
     return '<w:r>' + rpr + inner + '</w:r>';
   }
 
+  /* ---------------- 公式节点（OMML 由调用方注入转换器产出） ----------------
+     docxgen 保持零依赖：它不 import texconv，而是由调用方通过
+     build(html, { mathToOmml }) 注入一个 (tex, isBlock) => xml 的函数。
+     转换失败时退回显示 LaTeX 原文，绝不让整篇导出失败。 */
+  function mathClassMatch(node, name) {
+    if (!node || node.type !== 'el') return false;
+    return (' ' + (node.attrs.class || '') + ' ').indexOf(' ' + name + ' ') >= 0;
+  }
+
+  function mathNodeXml(node, ctx, block) {
+    if (!ctx.mathToOmml) return null;
+    var tex = node.attrs['data-tex'];
+    if (tex == null) return null;
+    try {
+      return ctx.mathToOmml(tex, !!block) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function runsFromNodes(nodes, fmt, ctx) {
     var out = '';
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i];
       if (n.type === 'text') { out += runXml(n.text, fmt); continue; }
+      if (mathClassMatch(n, 'math-inline')) {
+        var mx = mathNodeXml(n, ctx, false);
+        out += mx || runXml('$' + (n.attrs['data-tex'] || '') + '$', fmt);
+        continue;
+      }
+      if (mathClassMatch(n, 'math-block')) {
+        var mxb = mathNodeXml(n, ctx, true);
+        out += mxb || runXml('$$' + (n.attrs['data-tex'] || '') + '$$', fmt);
+        continue;
+      }
       if (n.tag === 'br') { out += runXml('\n', fmt); continue; }
       if (n.tag === 'strong' || n.tag === 'b') { out += runsFromNodes(n.children, mix(fmt, { b: true }), ctx); continue; }
       if (n.tag === 'em' || n.tag === 'i') { out += runsFromNodes(n.children, mix(fmt, { i: true }), ctx); continue; }
@@ -316,6 +346,12 @@
         continue;
       }
       var tag = n.tag;
+      /* 块级公式：m:oMathPara 必须包在 w:p 里，且独占该段落 */
+      if (mathClassMatch(n, 'math-block')) {
+        var mb = mathNodeXml(n, ctx, true);
+        out += para(mb || runXml('$$' + (n.attrs['data-tex'] || '') + '$$', {}));
+        continue;
+      }
       if (/^h[1-6]$/.test(tag)) {
         var lvl = parseInt(tag.charAt(1), 10);
         out += para(runsFromNodes(n.children, {}, ctx), '<w:pStyle w:val="Heading' + lvl + '"/>');
@@ -530,12 +566,15 @@
   }
 
   /* ---------------- 组装 .docx ---------------- */
-  function build(html) {
+  function build(html, opts) {
+    opts = opts || {};
     var nodes = parseHtml(String(html || ''));
     var links = [];
     var ctx = {
       nums: [],
       nextNumId: 1,
+      /* 公式转换器由调用方注入，docxgen 自身不依赖 texconv */
+      mathToOmml: typeof opts.mathToOmml === 'function' ? opts.mathToOmml : null,
       newList: function (ordered) {
         var id = this.nextNumId++;
         this.nums.push({ numId: id, abstractId: ordered ? 1 : 0 });
@@ -564,7 +603,9 @@
 
     var document = XML_HEAD
       + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
-      + 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      + 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+      /* 数学命名空间：没有公式时声明也无害，有公式时缺了它 Word 直接判文档损坏 */
+      + 'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
       + '<w:body>' + (body || para('')) + SECT_PR + '</w:body></w:document>';
 
     return zip([
