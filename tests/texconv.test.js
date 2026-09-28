@@ -243,3 +243,21 @@ test('块级公式用 m:oMathPara 包裹并居中', () => {
   assert.match(p, /<\/m:oMathPara>$/);
   assert.ok(wellFormed(p).ok, '块级公式应良构');
 });
+
+/* ---------- v1.3.1：控制字符与 $ 启发式 ---------- */
+
+test('公式文本中的控制字符被剔除，产出仍是良构 XML', () => {
+  const o = texconv.mathToOmml('\\text{a\u0007b}');
+  assert.ok(!o.includes('\u0007'), '控制字符应被剔除');
+  assert.ok(o.includes('ab'), '正文保留');
+});
+
+test('isLikelyMath 启发式', () => {
+  const M = texconv.isLikelyMath;
+  assert.strictEqual(M('x^2'), true);
+  assert.strictEqual(M('2+2'), true);
+  assert.strictEqual(M('5，那件 '), false, '含全角逗号');
+  assert.strictEqual(M('5 and got '), false, '结尾空白');
+  assert.strictEqual(M(' x^2'), false, '开头空白');
+  assert.strictEqual(M(''), false);
+});

@@ -154,3 +154,40 @@ test('导出：转换器抛错时整篇导出不失败', () => {
   assert.ok(xml, '转换器崩溃也不应影响导出');
   assert.ok(!xml.includes('<m:oMath>'), '不应有半截 OMML');
 });
+
+/* ==================================================================
+   v1.3.1 修复回归：$ 误判与块级公式吞行
+   ================================================================== */
+
+test('美元价格不触发公式渲染（真实场景回归）', () => {
+  for (const src of ['这件 $5，那件 $10', 'I paid $5 and got $10 back', '成本 $5 和 $10，见下文']) {
+    const out = parser.renderMarkdown(src);
+    assert.ok(!out.includes('math-inline'), `不应生成公式：${src} → ${out}`);
+    assert.ok(out.includes('$'), `原文 $ 应保留：${src}`);
+  }
+});
+
+test('真公式不受价格启发式影响', () => {
+  for (const src of ['$x^2$', '$2+2$', '$\\alpha$', '$E=mc^2$', '$a_i$']) {
+    assert.ok(parser.renderMarkdown(src).includes('math-inline'), `应为公式：${src}`);
+  }
+});
+
+test('块级公式闭合后同行的剩余文字不丢失', () => {
+  const out = parser.renderMarkdown('$$x^2$$ 后续说明');
+  assert.ok(/data-tex="x\^2"/.test(out), '公式应生成');
+  assert.match(out, /后续说明/, '剩余文字不能被吞');
+});
+
+test('未闭合的块级公式按原文显示，不吞后续内容', () => {
+  const out = parser.renderMarkdown('$$\n未闭合\n后面还有段落');
+  assert.ok(!out.includes('math-block'), '未闭合不应生成公式块');
+  assert.ok(out.includes('未闭合') && out.includes('后面还有段落'), '内容全保留');
+});
+
+test('行中的 $$..$$ 处理为公式且不残留裸 $', () => {
+  const out = parser.renderMarkdown('文本 $$x$$ 文本');
+  assert.ok(/data-tex="x"/.test(out), '应识别公式：' + out);
+  assert.ok(!out.includes('$x$'), '不应按行内公式拆出 $x$：' + out);
+  assert.match(out, /文本/, '两侧文字保留');
+});

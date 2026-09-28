@@ -273,3 +273,25 @@ test('往返：LaTeX → Markdown → LaTeX 保留关键结构', () => {
   assert.match(back, /\\item 第一点/);
   assert.match(back, /a\^2 \+ b\^2 = c\^2/, '公式内容应完整保留');
 });
+
+/* ==================================================================
+   v1.3.1 修复回归
+   ================================================================== */
+
+test('行中的 $$..$$ 转为显示公式环境', () => {
+  const out = MD('前文 $$x^2$$ 后文');
+  assert.match(out, /\\\[x\^2\\\]/);
+  assert.match(out, /后文/);
+});
+
+test('美元价格在导出中原样保留，且不破坏后续真公式', () => {
+  const out = MD('价格 $5 和 $10，公式 $x_i^2$ 如下');
+  assert.strictEqual(out, '价格 \\$5 和 \\$10，公式 $x_i^2$ 如下', '正文中的 $ 在 LaTeX 源码里必须转义为 \\$');
+});
+
+test('未闭合块级公式按原文保留并告警', () => {
+  const r = mdToLatex('$$\nx\n未闭合', { standalone: true });
+  assert.ok(r.warnings.some((w) => w.includes('$$')), '应告警：' + JSON.stringify(r.warnings));
+  assert.match(r.text, /x/);
+  assert.ok(!r.text.includes('\\['), '未闭合不应产出公式环境');
+});

@@ -266,8 +266,17 @@ function inline(text) {
   const inter = [];
   let t = String(text);
 
-  /* 公式最先摘出来：$..$ 内容既不能走 HTML 转义，也不能被后面的强调规则误伤 */
+  /* 行中出现的 $$..$$ 按行内公式处理 —— 块级必须独占一行，
+     否则导出 docx 时 m:oMathPara 无法与文本共存于同一个段落 */
+  t = t.replace(/\$\$([\s\S]+?)\$\$/g, function (m, tex) {
+    inter.push(renderMathHTML(tex.trim(), false));
+    return '\u0000' + (inter.length - 1) + '\u0000';
+  });
+
+  /* 公式最先摘出来：$..$ 内容既不能走 HTML 转义，也不能被后面的强调规则误伤。
+     先过 isLikelyMath 启发式，把 "$5，那件 $10" 这类美元价格排除在公式之外。 */
   t = t.replace(/\$([^$\n]+?)\$/g, function (m, tex) {
+    if (window.texconv && !window.texconv.isLikelyMath(tex)) return m;
     inter.push(renderMathHTML(tex, false));
     return '\u0000' + (inter.length - 1) + '\u0000';
   });
@@ -345,17 +354,31 @@ function renderBlocks(lines) {
       out.push('<pre><code>' + escapeHtml(buf.join('\n')) + '</code></pre>');
       continue;
     }
-    /* 块级公式 $$...$$（可跨行） */
+    /* 块级公式 $$...$$（可跨行）。用 indexOf 找闭合，闭合后同行的剩余文字
+       要继续按 Markdown 处理；找不到闭合时整块按原文输出，绝不吞行。 */
     if (/^\s*\$\$/.test(line)) {
-      const first = line.replace(/^\s*\$\$/, '');
-      const mbuf = [];
-      if (/\$\$\s*$/.test(first)) { mbuf.push(first.replace(/\$\$\s*$/, '')); i++; }
-      else {
-        mbuf.push(first); i++;
-        while (i < lines.length && !/\$\$\s*$/.test(lines[i])) { mbuf.push(lines[i]); i++; }
-        if (i < lines.length) { mbuf.push(lines[i].replace(/\$\$\s*$/, '')); i++; }
+      const rest = line.replace(/^\s*\$\$/, '');
+      const end = rest.indexOf('$$');
+      if (end >= 0) {
+        out.push(renderMathHTML(rest.slice(0, end).trim(), true));
+        const after = rest.slice(end + 2).trim();
+        if (after) { lines[i] = after; continue; }
+        i++;
+        continue;
       }
-      out.push(renderMathHTML(mbuf.join('\n').trim(), true));
+      const mbuf = [rest];
+      i++;
+      let closed = false;
+      while (i < lines.length) {
+        const e2 = lines[i].indexOf('$$');
+        if (e2 >= 0) { mbuf.push(lines[i].slice(0, e2)); i++; closed = true; break; }
+        mbuf.push(lines[i]); i++;
+      }
+      if (closed) {
+        out.push(renderMathHTML(mbuf.join('\n').trim(), true));
+      } else {
+        out.push('<p>' + escapeHtml(('$$' + mbuf.join('\n')).trim()) + '</p>');
+      }
       continue;
     }
     const h = line.match(/^(#{1,6})\s+(.*)$/);

@@ -478,9 +478,27 @@
      ================================================================== */
 
   function escXml(s) {
+    /* XML 1.0 不允许多数 C0 控制字符 —— 公式文本可能来自剪贴板粘贴，
+       必须先剔除，否则产出的 document.xml 会被 Word 判定为损坏 */
     return String(s)
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  /* 判断 $..$ 片段是否像数学公式，而不是美元价格（"$5，那件 $10"）。
+     三条启发式（参考 Pandoc 的 markdown 规则并放宽）：
+       1. 开 $ 后不能是空白        —— 排除 "$ x^2$"
+       2. 闭 $ 前不能是空白        —— 排除 "$x^2 $"、"5 and got " 这类英文句子被夹住
+       3. 内容不含 CJK / 全角标点  —— 排除 "5，那件 "；真中文用 \text{} 写
+     首字符是数字不排除（$2+2$ 是合法公式）。 */
+  function isLikelyMath(tex) {
+    var t = String(tex == null ? '' : tex);
+    if (!t) return false;
+    if (/^\s/.test(t)) return false;
+    if (/\s$/.test(t)) return false;
+    if (/[\u4e00-\u9fff\u3000-\u303f\u3001\u3002\uff01-\uff5e\u2018-\u201d\u2026]/.test(t)) return false;
+    return true;
   }
 
   function mathmlOf(nodes) {
@@ -752,7 +770,13 @@
 
     var t = String(s);
 
-    t = t.replace(/\$([^$\n]+?)\$/g, function (m, body) { return hole('$' + body + '$'); });
+    /* 行中出现的 $$..$$（块级扫描只认行首的）→ 显示公式环境。
+       必须在行内 $..$ 之前处理，否则 $$x$$ 会被拆成 "$" + 行内公式 + "$"。 */
+    t = t.replace(/\$\$([\s\S]+?)\$\$/g, function (m, body) { return hole('\\[' + body.trim() + '\\]'); });
+    t = t.replace(/\$([^$\n]+?)\$/g, function (m, body) {
+      if (!isLikelyMath(body)) return m;   /* 美元价格等非公式，原样保留 */
+      return hole('$' + body + '$');
+    });
     t = t.replace(/`([^`]+)`/g, function (m, c) { return hole('\\texttt{' + texEscape(c) + '}'); });
     t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (m, alt, u) {
       return hole('\\includegraphics[width=0.9\\linewidth]{' + escPath(u) + '}');
@@ -826,21 +850,34 @@
         continue;
       }
 
-      /* --- 块级公式 $$...$$ --- */
+      /* --- 块级公式 $$...$$（可跨行） ---
+         用 indexOf 找闭合标记，而不是要求"行尾必须是 $$"：否则 "$$x$$ 说明"
+         这类闭合检测会失败，把后续所有行吞到下一个 $$ 为止。
+         找不到闭合时按原文保留并告警 —— 不静默丢内容。 */
       if (/^\s*\$\$/.test(line)) {
-        var first = line.replace(/^\s*\$\$/, '');
-        var buf = [];
-        if (/\$\$\s*$/.test(first)) {
-          buf.push(first.replace(/\$\$\s*$/, ''));
+        var rest = line.replace(/^\s*\$\$/, '');
+        var endIdx = rest.indexOf('$$');
+        if (endIdx >= 0) {
+          out.push('\\[\n' + rest.slice(0, endIdx).trim() + '\n\\]');
+          var after = rest.slice(endIdx + 2).trim();
+          if (after) { lines[i] = after; continue; }
           i++;
-        } else {
-          buf.push(first);
-          i++;
-          while (i < lines.length && !/\$\$\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
-          if (i < lines.length) { buf.push(lines[i].replace(/\$\$\s*$/, '')); i++; }
-          else warnings.push('块级公式缺少收尾的 $$，已按原文收口');
+          continue;
         }
-        out.push('\\[\n' + buf.join('\n').trim() + '\n\\]');
+        var mbuf = [rest];
+        i++;
+        var closed = false;
+        while (i < lines.length) {
+          var e2 = lines[i].indexOf('$$');
+          if (e2 >= 0) { mbuf.push(lines[i].slice(0, e2)); i++; closed = true; break; }
+          mbuf.push(lines[i]); i++;
+        }
+        if (closed) {
+          out.push('\\[\n' + mbuf.join('\n').trim() + '\n\\]');
+        } else {
+          warnings.push('块级公式缺少收尾的 $$，已按原文保留');
+          out.push(inlineTex(('$$' + mbuf.join('\n')).trim()));
+        }
         continue;
       }
 
@@ -1223,6 +1260,7 @@
     mathToMathML: mathToMathML,
     mathToOmml: mathToOmml,
     mathToOmmlPara: mathToOmmlPara,
+    isLikelyMath: isLikelyMath,
     /* 文档层 */
     mdToLatex: mdToLatex,
     latexToMd: latexToMd
