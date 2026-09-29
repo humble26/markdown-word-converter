@@ -88,6 +88,20 @@ test('块级公式：oMathPara 还原为 $$ 围栏', async () => {
   assert.match(md, /\$\$\n\\frac\{a\}\{b\}\n\$\$/);
 });
 
+test('公式端到端往返：根式次数、大运算符上下限、重音不丢', async () => {
+  // 这三个是 v1.4.1 修掉的结构 bug：m:deg 位置、m:nary 槽位、bar 重音字符
+  const cases = [
+    ['\\sqrt[3]{x}', /\$\\sqrt\[3\]\{x\}\$/],
+    ['\\sum_{i=1}^{n} i', /\$\\sum_\{i=1\}\^\{n\} i\$/],
+    ['\\int_0^1 f(x)dx', /\$\\int_\{0\}\^\{1\} f\(x\)dx\$/],
+    ['\\bar{y}', /\$\\bar\{y\}\$/]
+  ];
+  for (const [tex, re] of cases) {
+    const md = await roundTrip('<p><span class="math-inline" data-tex="' + tex + '">x</span></p>');
+    assert.match(md, re, `${tex} 往返结果不符：${md}`);
+  }
+});
+
 test('XML 非法控制字符被剔除后仍可读回', async () => {
   // 垂直制表符属于 XML 1.0 非法字符，docxgen 会剔除；这里确认不会破坏解析
   const md = await roundTrip('<p>前\u000b后</p>');

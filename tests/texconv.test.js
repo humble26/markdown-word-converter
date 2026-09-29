@@ -115,7 +115,8 @@ test('矩阵单元格内的上下标不被 \r 误伤', () => {
 
 test('重音符号', () => {
   assert.strictEqual(T('\\vec{v}'), 'v⃗');
-  assert.strictEqual(T('\\bar{x}'), 'x‾');
+  // bar 用 U+0305 组合上划线（与 OMML 一致），不再是间隔符 U+203E
+  assert.strictEqual(T('\\bar{x}'), 'x\u0305');
   assert.strictEqual(T('\\hat{y}'), 'ŷ');
 });
 
@@ -242,6 +243,77 @@ test('块级公式用 m:oMathPara 包裹并居中', () => {
   assert.match(p, /<m:jc m:val="center"\/>/);
   assert.match(p, /<\/m:oMathPara>$/);
   assert.ok(wellFormed(p).ok, '块级公式应良构');
+});
+
+/* ---------- v1.4.1：OMML 结构合规回归 ---------- */
+
+test('根式：m:deg 必须与 m:e 同级，不能塞进 m:radPr', () => {
+  // CT_Rad 只允许 radPr 里出现 degHide / ctrlPr；deg 放错位置 Word 会判公式缺损
+  const o = texconv.mathToOmml('\\sqrt[3]{x}');
+  const pr = /<m:radPr>([\s\S]*?)<\/m:radPr>/.exec(o);
+  assert.ok(pr, '应有 m:radPr');
+  assert.ok(!pr[1].includes('<m:deg>'), 'm:radPr 内不应出现 m:deg');
+  const rad = /<m:rad>([\s\S]*?)<\/m:rad>/.exec(o)[1];
+  assert.match(rad, /<m:deg>[\s\S]*?3[\s\S]*?<\/m:deg>/, 'm:deg 应是 m:rad 的直接子元素');
+  assert.match(rad, /<\/m:deg>\s*<m:e>/, 'deg 必须排在 e 之前');
+});
+
+test('根式：无次数时用 degHide 隐藏，但仍保留 m:deg 元素', () => {
+  const o = texconv.mathToOmml('\\sqrt{x}');
+  assert.match(o, /<m:degHide m:val="1"\/>/, '应写 degHide');
+  const pr = /<m:radPr>([\s\S]*?)<\/m:radPr>/.exec(o)[1];
+  assert.ok(!pr.includes('<m:deg>'), 'm:deg 不应在 radPr 内');
+  assert.match(o, /<\/m:radPr>\s*<m:deg>/, 'm:deg 应是 m:rad 的直接子元素');
+});
+
+test('大运算符：m:nary 必须显式给出 m:sub / m:sup 槽位', () => {
+  // CT_Nary 要求 naryPr? → sub → sup → e，且槽位内容必须裹在 sub/sup 里
+  const o = texconv.mathToOmml('\\sum_{i=1}^{n} i');
+  assert.match(o, /<m:sub>[\s\S]*?i[\s\S]*?<\/m:sub>/, '下限应包在 m:sub 内');
+  assert.match(o, /<m:sup>[\s\S]*?n[\s\S]*?<\/m:sup>/, '上限应包在 m:sup 内');
+  assert.match(o, /<\/m:naryPr>\s*<m:sub>[\s\S]*?<\/m:sub>\s*<m:sup>[\s\S]*?<\/m:sup>\s*<m:e>/,
+    '子元素顺序必须是 sub → sup → e');
+  const back = require('../renderer/docxread.js');
+  const tree = back.parseXml('<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="x">'
+    + o.replace(/^<m:oMath>|<\/m:oMath>$/g, '') + '</m:oMath>');
+  assert.strictEqual(back.ommlToLatex(tree), '\\sum_{i=1}^{n} i', '往返后上下限不能丢');
+});
+
+test('大运算符：只有下限时上限槽位也要显式存在', () => {
+  // \sum 单独出现不算大运算符（见「不吞掉后继内容」用例），必须带上下限才成 m:nary
+  const o = texconv.mathToOmml('\\sum_{i} x');
+  assert.match(o, /<m:sub>[\s\S]*?<\/m:sub>\s*<m:sup>[\s\S]*?<\/m:sup>/, '空上限槽位也必须显式存在');
+});
+
+test('上划线重音使用 U+0305，而非间隔符 U+203E', () => {
+  // Word 的 bar 重音就是 U+0305（组合上划线）；U+203E 是间隔字符，反向也认不出
+  for (const tex of ['\\bar{y}', '\\overline{AB}']) {
+    const o = texconv.mathToOmml(tex);
+    const chr = /<m:chr m:val="([^"]*)"/.exec(o)[1];
+    assert.strictEqual(chr.codePointAt(0), 0x0305, `${tex} 应使用 U+0305`);
+  }
+});
+
+test('公式往返：常见结构经 OMML 一圈后语义不变', () => {
+  const back = require('../renderer/docxread.js');
+  const cases = {
+    'x^2': 'x^{2}',
+    '\\frac{a}{b}': '\\frac{a}{b}',
+    '\\sqrt[3]{x}': '\\sqrt[3]{x}',
+    '\\sum_{i=1}^{n} i': '\\sum_{i=1}^{n} i',
+    '\\int_0^1 f(x)dx': '\\int_{0}^{1} f(x)dx',
+    '\\hat{x}': '\\hat{x}',
+    '\\vec{v}': '\\vec{v}',
+    '\\bar{y}': '\\bar{y}',
+    // \to 在正向已摊平成符号 →，反向按符号原样输出
+    '\\lim_{x\\to 0}': '\\lim_{x→0}'
+  };
+  for (const [tex, want] of Object.entries(cases)) {
+    const o = texconv.mathToOmml(tex);
+    const tree = back.parseXml('<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:w="x">'
+      + o.replace(/^<m:oMath>|<\/m:oMath>$/g, '') + '</m:oMath>');
+    assert.strictEqual(back.ommlToLatex(tree), want, `${tex} 往返结果不符`);
+  }
 });
 
 /* ---------- v1.3.1：控制字符与 $ 启发式 ---------- */

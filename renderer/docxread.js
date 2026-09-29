@@ -365,8 +365,17 @@
     '∫': '\\int', '∬': '\\iint', '∭': '\\iiint', '∮': '\\oint'
   };
 
+  /* \lim / \max 这类「文字型」大运算符：m:chr 存的是文字而非符号，需补回命令名 */
+  var LIM_BACK = {
+    'lim': '\\lim', 'lim sup': '\\limsup', 'lim inf': '\\liminf',
+    'max': '\\max', 'min': '\\min', 'sup': '\\sup', 'inf': '\\inf',
+    'det': '\\det', 'gcd': '\\gcd', 'Pr': '\\Pr', 'lcm': '\\lcm'
+  };
+
   var ACCENT_BACK = {
     '\u0302': '\\hat', '\u0303': '\\tilde', '\u0304': '\\bar', '\u0305': '\\bar',
+    /* U+203E / U+00AF：旧版本导出用过的间隔上划线字符，兼容读回 */
+    '\u203E': '\\bar', '\u00AF': '\\bar',
     '\u20D7': '\\vec', '\u0307': '\\dot', '\u0308': '\\ddot', '\u0301': '\\acute',
     '\u0300': '\\grave', '\u030C': '\\check', '\u0306': '\\breve'
   };
@@ -453,7 +462,7 @@
         var chrEl = pr ? firstChild(pr, 'chr') : null;
         var chr = chrEl ? (attr(chrEl, 'm:val') || '') : '';
         if (!chr) chr = '∑';
-        var op = NARY_BACK[chr] || chr;
+        var op = NARY_BACK[chr] || LIM_BACK[chr] || chr;
         var sub = ommlChild(n, 'sub');
         var sup = ommlChild(n, 'sup');
         var out = op;

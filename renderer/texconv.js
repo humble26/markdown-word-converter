@@ -86,7 +86,9 @@
   /* 重音：LaTeX 命令 → [OMML 重音字符, MathML 重音符号] */
   var ACCENTS = {
     vec: ['⃗', '→'], hat: ['̂', '^'], widehat: ['̂', '^'],
-    bar: ['‾', '‾'], overline: ['‾', '‾'],
+    /* 上划线用 U+0305 组合上划线：Word 的「bar」重音就是这个字符；
+       旧版误用 U+203E（间隔符），既非组合字符，反向也认不出来 */
+    bar: ['\u0305', '‾'], overline: ['\u0305', '‾'],
     tilde: ['̃', '~'], widetilde: ['̃', '~'],
     dot: ['̇', '˙'], ddot: ['̈', '¨'],
     check: ['̌', 'ˇ'], breve: ['̆', '˘'], acute: ['́', '´'], grave: ['̀', '`']
@@ -650,21 +652,28 @@
         + '<m:num>' + ommlSlot(n.num) + '</m:num><m:den>' + ommlSlot(n.den) + '</m:den></m:f>'
         + '</m:e></m:d>');
       case 'sqrt': {
-        var degXml = n.deg
-          ? '<m:deg>' + ommlSlot(n.deg) + '</m:deg>'
-          : '<m:degHide m:val="1"/><m:deg/>';
-        return wrap('<m:rad><m:radPr>' + degXml + '<m:ctrlPr><w:rPr>' + MATH_FONT + '</w:rPr></m:ctrlPr></m:radPr>'
+        /* CT_Rad 的合法子元素顺序是 radPr? → deg → e。
+           deg 必须与 e 同级，不能塞进 radPr（radPr 只认 degHide / ctrlPr），
+           否则 Word 视作公式缺损，反向读回时次数也会丢。 */
+        var radPr = '<m:radPr>'
+          + (n.deg ? '' : '<m:degHide m:val="1"/>')
+          + '<m:ctrlPr><w:rPr>' + MATH_FONT + '</w:rPr></m:ctrlPr></m:radPr>';
+        return wrap('<m:rad>' + radPr
+          + '<m:deg>' + ommlSlot(n.deg) + '</m:deg>'
           + '<m:e>' + ommlSlot(n.body) + '</m:e></m:rad>');
       }
       case 'nary': {
+        /* CT_Nary 要求 naryPr? → sub → sup → e，sub / sup 是必需元素。
+           槽位内容必须裹在 m:sub / m:sup 里，裸 run 会被 Word 当成非法结构。 */
         var isText = !!n.text;
         var pr = '<m:naryPr><m:chr m:val="' + escXml(n.chr) + '"/>'
           + '<m:limLoc m:val="' + (isText ? 'undOvr' : 'subSup') + '"/>';
         if (isText) pr += '<m:subHide m:val="0"/><m:supHide m:val="0"/>';
         pr += '<m:ctrlPr><w:rPr>' + MATH_FONT + '</w:rPr></m:ctrlPr></m:naryPr>';
-        var subX = n.sub && n.sub.type !== 'empty' ? ommlSlot(n.sub) : (isText ? '<m:sub><m:r><w:rPr>' + MATH_FONT + '</w:rPr><m:t/></m:r></m:sub>' : '<m:sub/>');
-        var supX = n.sup && n.sup.type !== 'empty' ? ommlSlot(n.sup) : (isText ? '<m:sup><m:r><w:rPr>' + MATH_FONT + '</w:rPr><m:t/></m:r></m:sup>' : '<m:sup/>');
-        return wrap('<m:nary>' + pr + subX + supX + '<m:e>' + ommlSlot(n.body) + '</m:e></m:nary>');
+        return wrap('<m:nary>' + pr
+          + '<m:sub>' + ommlSlot(n.sub) + '</m:sub>'
+          + '<m:sup>' + ommlSlot(n.sup) + '</m:sup>'
+          + '<m:e>' + ommlSlot(n.body) + '</m:e></m:nary>');
       }
       case 'delim':
         return wrap('<m:d><m:dPr>'
