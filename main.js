@@ -161,25 +161,24 @@ ipcMain.handle('save-text', guard(async (_event, payload) => {
   return { saved: true, path: result.filePath };
 }));
 
-// 打开 LaTeX 源文件（「导入 .tex」按钮用；拖拽走渲染进程 File API，不经这里）
-ipcMain.handle('open-tex', guard(async () => {
+// 打开受支持的文件（「导入文件」按钮用；拖拽走渲染进程 File API，不经这里）
+// 返回字节流的 base64：.docx 是二进制包，统一按字节传，由渲染进程按类型解析。
+ipcMain.handle('open-file', guard(async () => {
   const result = await dialog.showOpenDialog({
-    title: '打开 LaTeX 源文件',
+    title: '打开文件',
     filters: [
+      { name: '所有支持的文件', extensions: ['md', 'markdown', 'mdx', 'txt', 'tex', 'latex', 'docx', 'doc'] },
+      { name: 'Markdown / 文本', extensions: ['md', 'markdown', 'mdx', 'txt'] },
       { name: 'LaTeX 源文件', extensions: ['tex', 'latex'] },
-      { name: '文本文件', extensions: ['txt', 'md'] },
+      { name: 'Word 文档', extensions: ['docx', 'doc'] },
       { name: '所有文件', extensions: ['*'] }
     ],
     properties: ['openFile']
   });
   if (result.canceled || !result.filePaths.length) return { opened: false };
-  // .tex 可能是各种编码产生的，先按 UTF-8 读，出现替换符再退回 GBK 兜底
   const p = result.filePaths[0];
-  let text = fs.readFileSync(p, 'utf-8');
-  if (text.indexOf('\uFFFD') >= 0) {
-    try { text = fs.readFileSync(p, 'gbk'); } catch (e) { /* 保持 UTF-8 结果 */ }
-  }
-  return { opened: true, path: p, text: text };
+  const bytes = fs.readFileSync(p);
+  return { opened: true, path: p, bytes: bytes.toString('base64') };
 }));
 
 app.whenReady().then(() => {

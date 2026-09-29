@@ -1,15 +1,19 @@
 # Markdown → Word 转换器
 
-将 AI 回复的 Markdown 内容一键转换为带格式的富文本，粘贴到 Word 后标题、加粗、列表、表格、代码块等样式完整保留。支持直接导出 .docx / .doc Word 文档文件。
+将 AI 回复的 Markdown 内容一键转换为带格式的富文本，粘贴到 Word 后标题、加粗、列表、表格、代码块等样式完整保留。支持直接导出 .docx / .doc Word 文档与 .tex LaTeX 源码，并可拖入文件自动识别类型反向转换。
 
 ## 功能
 
 - **复制富文本**：一键复制带格式内容，粘贴到 Word 样式完整保留
 - **导出 .docx（原生格式）**：生成标准 OOXML 文档，Word 可直接编辑，标题进入导航窗格
 - **导出 .doc（兼容格式）**：HTML 封装的老式 .doc，供极旧版本 Office 使用
+- **导出 .tex**：Markdown 转 LaTeX 源码，中文默认 `ctexart`，可直接用 xelatex 编译
+- **拖入文件自动识别**：把 .md / .txt / .tex / .docx / .doc 拖进窗口即可，自动判断类型并**互补推荐**导出格式
+- **Word 反向导入**：拖入 .docx 自动解析为 Markdown（含标题、列表、表格、超链接、OMML 公式）
+- **数学公式**：`$..$` / `$$..$$` 预览渲染为 MathML，导出 .docx 转为 Word 原生可编辑公式
 - **多级列表**：按缩进还原嵌套的 ul/ol，最多支持 9 级
 - **实时预览**：左侧输入 Markdown，右侧即时显示转换效果
-- **离线解析**：内置轻量 Markdown 解析器与 docx 生成器，无需联网、无第三方依赖
+- **离线解析**：内置轻量 Markdown 解析器与 docx 生成/读取器，无需联网、无第三方依赖
 
 ## 版本
 
@@ -18,7 +22,7 @@
 | 桌面版（Electron） | `main.js` + `renderer/` | 可打包为 Windows 安装程序，使用原生剪贴板 API，导出时弹出系统保存对话框 |
 | 网页版 | `web/markdown-word-converter.html` | 单文件 HTML，双击即用，无需安装，导出时浏览器直接下载 |
 
-导出格式在工具栏右侧下拉框中选择，默认 `.docx`。
+导出格式在工具栏右侧下拉框中选择，默认 `.docx`。拖入文件时会按**类型互补**规则自动切换：拖入 `.md` / `.txt` / `.docx` / `.doc` → 自动选 `.tex`，拖入 `.tex` → 自动选 `.docx`（识别结果仍可手动改）。
 
 ## 快速开始
 
@@ -41,10 +45,20 @@ npx electron-builder --win
 |------|----------|-------------|----------|
 | `.docx` | 按 OOXML 规范打包（ZIP + WordprocessingML），零依赖 | Word 2007+、WPS 均可正常打开与编辑 | 默认推荐 |
 | `.doc` | HTML 内容封装为 .doc | Word 可打开，本质仍是 HTML | 仅极旧环境兼容 |
+| `.tex` | Markdown 映射为 LaTeX 命令（中文走 `ctexart`） | 非 Word 格式，用 xelatex 编译为 PDF | 论文 / 排版场景 |
 
 `.docx` 的样式映射：Markdown 标题 → Word 内置「标题 1~6」样式（可用导航窗格/自动目录）；列表 → 真实编号列表，支持 9 级嵌套且各列表独立从 1 开始编号；表格 → 带边框的 Word 表格，表头自动加粗并跨页重复；代码块 → 等宽字体 + 浅底纹；引用 → 左侧蓝色竖线 + 浅蓝底；链接 → 可点击超链接。
 
 ## 更新日志
+
+### v1.4.0
+- 新增 **拖入文件自动识别类型并选择导出格式**：拖入 .md / .txt / .tex / .docx / .doc 自动判断输入类型，并按**类型互补**规则切换导出格式（Markdown/Word → `.tex`，LaTeX → `.docx`），识别结果可手动覆盖
+- 新增 **Word 文档反向导入**：拖入或打开 .docx，自动解析 OOXML 还原为 Markdown —— 标题、粗斜体、上下标、多级列表、表格、超链接、图片与 OMML 公式（公式还原为 LaTeX 交回同一条渲染/导出链路）
+- 新增 **零依赖 .docx 读取器** `renderer/docxread.js`：自研 ZIP 解包（`DecompressionStream('deflate-raw')` + Zip64 兜底）与 `word/document.xml` 解析，浏览器 / Electron / Node 三处行为一致
+- 新增 **旧版二进制 .doc 的明确提示**：识别 OLE 复合文档后不静默失败，引导用户在 Word 中「另存为」.docx；HTML 形态的 .doc 仍按 HTML 转 Markdown
+- 导入按钮由「导入 .tex」升级为「导入文件」，支持全部类型；桌面版 `open-tex` IPC 升级为通用 `open-file`（返回字节流）
+- 网页版单文件同步全部新能力（内联 `docxread.js` 与同样的拖拽逻辑）
+- 新增测试 `tests/docxread.test.js`（docx 往返、ZIP 解包、OMML 公式、类型识别规则）与 `tests/page-smoke.test.js`（桌面版 / 网页版「拖入 → 识别 → 互补推荐」全链路冒烟），测试总数增至 118 项
 
 ### v1.3.1
 - 修复：正文中的美元价格（如「这件 $5，那件 $10」）被误判为数学公式，导致预览与 Word 导出乱掉；新增启发式判断（首尾空白 / 含中文与全角标点），价格原样保留，真公式不受影响

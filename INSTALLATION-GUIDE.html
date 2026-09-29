@@ -138,7 +138,7 @@
 <body>
 
 <div class="hero">
-  <div class="badge">v1.3.1 · Windows</div>
+  <div class="badge">v1.4.0 · Windows</div>
   <h1>Markdown → Word 转换器</h1>
   <p>安装与使用指南</p>
 </div>
@@ -163,6 +163,7 @@
 <section id="intro">
   <h2>一、简介与版本对比</h2>
   <p>本工具用于将 AI（如 ChatGPT、Claude、DeepSeek 等）回复的 Markdown 内容，一键转换为带格式的富文本，粘贴到 Microsoft Word 后标题层级、加粗、斜体、列表、表格、代码块、引用等样式完整保留。</p>
+  <p>除复制富文本外，还可直接导出 <code>.docx</code> / <code>.doc</code> Word 文档与 <code>.tex</code> LaTeX 源码；把 <code>.md</code> / <code>.txt</code> / <code>.tex</code> / <code>.docx</code> / <code>.doc</code> 文件<b>拖进窗口</b>即可自动识别类型，并按互补规则选择导出格式（Markdown/Word → <code>.tex</code>，LaTeX → <code>.docx</code>）。拖入 <code>.docx</code> 还会自动反向解析为 Markdown。</p>
 
   <table>
     <tr><th>版本</th><th>文件</th><th>适用场景</th><th>安装要求</th></tr>
@@ -180,7 +181,7 @@
     </tr>
     <tr>
       <td><span class="tag tag-orange">安装版</span></td>
-      <td><code>Markdown-Word转换器 Setup 1.0.0.exe</code></td>
+      <td><code>Markdown-Word转换器 Setup 1.4.0.exe</code></td>
       <td>长期使用、需要桌面快捷方式</td>
       <td>Windows 10/11</td>
     </tr>
@@ -235,7 +236,7 @@
   <div class="card">
     <h3>安装步骤</h3>
     <ol class="steps">
-      <li>双击运行 <code>Markdown-Word转换器 Setup 1.0.0.exe</code></li>
+      <li>双击运行 <code>Markdown-Word转换器 Setup 1.4.0.exe</code></li>
       <li>如出现 Windows SmartScreen 提示，点击「更多信息」→「仍要运行」（应用未签名，属正常）</li>
       <li>选择安装路径（默认 <code>%LOCALAPPDATA%\Programs\</code> 下），点击「下一步」</li>
       <li>选择是否创建桌面快捷方式和开始菜单快捷方式</li>
@@ -278,7 +279,7 @@ npx electron-builder --win
 
 # 5. 产物在 release/ 目录
 #    - win-unpacked\         未打包的应用目录（可直接运行）
-#    - ...Setup 1.0.0.exe    NSIS 安装程序</code></pre>
+#    - ...Setup 1.4.0.exe    NSIS 安装程序</code></pre>
   </div>
   <div class="card warn">
     <div class="label">注意</div>
@@ -296,17 +297,33 @@ npx electron-builder --win
       <li>在 AI 对话窗口中复制回复的 Markdown 文本</li>
       <li>在转换器左侧输入框粘贴（<span class="kbd">Ctrl</span>+<span class="kbd">V</span>）</li>
       <li>右侧实时显示格式预览，确认效果</li>
+      <li>在工具栏右侧下拉框选择导出格式（<code>.docx</code> / <code>.doc</code> / <code>.tex</code>，默认 <code>.docx</code>）</li>
       <li>选择输出方式：
         <ul>
           <li><b>复制富文本</b>：点击按钮 → 切换到 Word → <span class="kbd">Ctrl</span>+<span class="kbd">V</span> 粘贴</li>
-          <li><b>导出 Word 文档</b>：点击按钮 → 选择保存位置 → 直接生成 .doc 文件</li>
+          <li><b>导出文档</b>：点击按钮 → 选择保存位置 → 按所选格式生成文件</li>
         </ul>
       </li>
     </ol>
   </div>
   <div class="card tip">
-    <div class="label">导出 Word 文档</div>
-    <p>点击工具栏「导出 Word 文档」按钮，可直接生成 .doc 文件保存到本地，无需手动复制粘贴。桌面版弹出系统保存对话框让你选择路径；网页版则由浏览器直接下载。文件名自动从 Markdown 首个标题提取，无标题时默认为「导出文档」。</p>
+    <div class="label">拖入文件自动识别</div>
+    <p>把 <code>.md</code> / <code>.txt</code> / <code>.tex</code> / <code>.docx</code> / <code>.doc</code> 文件直接拖进窗口，或点击「导入文件」按钮选择：</p>
+    <ul>
+      <li>扩展名 + 内容特征双重判断输入类型，识别结果自动填入输入框</li>
+      <li>按<b>类型互补</b>规则自动切换导出格式：拖入 <code>.md</code> / <code>.txt</code> / <code>.docx</code> / <code>.doc</code> → 自动选 <code>.tex</code>；拖入 <code>.tex</code> → 自动选 <code>.docx</code>（仍可手动改）</li>
+      <li>拖入 <code>.docx</code> 会反向解析为 Markdown，含标题、列表、表格、超链接与 OMML 公式</li>
+      <li>旧版二进制 <code>.doc</code>（OLE 复合文档）暂不能直接解析，会提示先在 Word 中「另存为」<code>.docx</code></li>
+    </ul>
+  </div>
+  <div class="card tip">
+    <div class="label">导出文档</div>
+    <p>点击工具栏「导出文档」按钮，按下拉框所选格式直接生成文件到本地，无需手动复制粘贴。桌面版弹出系统保存对话框让你选择路径；网页版则由浏览器直接下载。文件名自动从 Markdown 首个标题提取，无标题时默认为「导出文档」。</p>
+    <ul>
+      <li><code>.docx</code>：标准 OOXML 文档，Word 2007+ / WPS 正常打开与编辑，标题进入导航窗格，公式为 Word 原生可编辑公式</li>
+      <li><code>.doc</code>：HTML 封装的老式格式，仅供极旧版本 Office 兼容</li>
+      <li><code>.tex</code>：LaTeX 源码，中文默认 <code>ctexart</code> 文档类，可直接用 xelatex 编译</li>
+    </ul>
   </div>
   <div class="card">
     <h3>支持的 Markdown 元素</h3>
@@ -324,13 +341,15 @@ npx electron-builder --win
       <tr><td>表格</td><td><code>| 列 | 列 |</code></td><td>带边框表格</td></tr>
       <tr><td>链接</td><td><code>[文字](URL)</code></td><td>蓝色超链接</td></tr>
       <tr><td>分割线</td><td><code>---</code></td><td>水平横线</td></tr>
+      <tr><td>数学公式</td><td><code>$x^2$</code> / <code>$$..$$</code></td><td>预览为 MathML，导出 .docx 为 Word 原生公式</td></tr>
     </table>
   </div>
   <div class="card tip">
     <div class="label">快捷键</div>
     <ul>
       <li><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">C</span> — 复制富文本（最常用）</li>
-      <li>「导出 Word 文档」按钮 — 直接生成 .doc 文件保存到本地</li>
+      <li>「导出文档」按钮 — 按所选格式生成文件保存到本地</li>
+      <li>「导入文件」按钮 / 拖入文件 — 自动识别类型并选择导出格式</li>
       <li>「复制纯文本」按钮 — 仅复制无格式文本</li>
       <li>「插入示例」按钮 — 加载演示内容，快速了解效果</li>
       <li>「清空」按钮 — 一键清空输入</li>
@@ -371,13 +390,23 @@ npx electron-builder --win
     <h3>Q6：能否支持 macOS 或 Linux？</h3>
     <p><b>A：</b>当前打包仅针对 Windows。项目基于 Electron 跨平台架构，修改 <code>package.json</code> 中的 <code>build.win.target</code> 并执行 <code>npx electron-builder --mac</code> 或 <code>--linux</code> 即可生成对应平台安装包。</p>
   </div>
+
+  <div class="card">
+    <h3>Q7：拖入 .doc 提示无法解析？</h3>
+    <p><b>A：</b>旧版二进制 <code>.doc</code> 是 OLE 复合文档，本工具不解析这种格式。请在 Word 中打开该文件，用「文件 → 另存为」保存为 <code>.docx</code> 后再拖进来。本工具自己导出的 HTML 形态 <code>.doc</code> 可以直接拖入解析。</p>
+  </div>
+
+  <div class="card">
+    <h3>Q8：拖入文件后导出格式为什么变了？</h3>
+    <p><b>A：</b>这是<b>类型互补</b>推荐：拖入 Markdown / Word 类文件时自动选 <code>.tex</code>，拖入 LaTeX 文件时自动选 <code>.docx</code>，避免「转回原格式」。识别结果只改下拉框默认值，你仍可手动切换成任意格式。</p>
+  </div>
 </section>
 
 </div>
 </div>
 
 <footer>
-  Markdown → Word 转换器 v1.3.1 · 基于 Electron 31 · MIT License
+  Markdown → Word 转换器 v1.4.0 · 基于 Electron 31 · MIT License
 </footer>
 
 </body>

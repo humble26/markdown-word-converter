@@ -187,7 +187,7 @@
     <option value="doc">.doc 兼容格式</option>
     <option value="tex">.tex LaTeX 源码</option>
   </select>
-  <button class="btn" id="btnImportTex" title="打开 .tex 文件并转换为 Markdown（也可以直接把文件拖进窗口）">导入 .tex</button>
+  <button class="btn" id="btnImportFile" title="打开 .md/.txt/.tex/.docx/.doc 文件（也可以直接把文件拖进窗口）">导入文件</button>
   <button class="btn" id="btnCopyPlain">复制纯文本</button>
   <span class="char-count" id="charCount"></span>
 </div>
@@ -207,6 +207,7 @@
 
 <script src="docxgen.js"></script>
 <script src="texconv.js"></script>
+<script src="docxread.js"></script>
 <script>
 "use strict";
 
@@ -623,9 +624,9 @@ async function exportWord() {
   showToast('Word 文档已下载 ✅（.doc 兼容格式）', true);
 }
 
-/* ============ LaTeX 导入与文件拖入识别 ============ */
+/* ============ 文件导入与拖入识别 ============ */
 
-/* 把 .tex 内容转成 Markdown 并填入输入框（导入按钮与拖拽共用） */
+/* LaTeX 文本 → Markdown 并填入输入框（导入按钮与拖拽共用） */
 function applyTex(texText, label) {
   if (!window.texconv) { showToast('LaTeX 转换模块未加载'); return; }
   const r = window.texconv.latexToMd(texText);
@@ -639,33 +640,53 @@ function applyTex(texText, label) {
   }
 }
 
-async function importTex() {
-  if (!window.texconv) { showToast('LaTeX 转换模块未加载'); return; }
-  if (!window.desktopAPI || !window.desktopAPI.openTex) {
-    showToast('网页版请直接把 .tex 文件拖进窗口');
+/* 导入的字节流统一交给 docxread 识别：
+   .docx/.doc 反向解析成 Markdown；.md/.txt 按内容嗅探；.tex 走 LaTeX 转换。
+   识别出的类型同时决定导出格式的默认值（类型互补：Markdown→.tex，LaTeX→.docx）。 */
+async function applyFile(name, bytes) {
+  if (!window.docxread) { showToast('文件解析模块未加载'); return; }
+  let res;
+  try { res = await window.docxread.readDropped(name, bytes); }
+  catch (err) { showToast('读取失败：' + err.message); return; }
+
+  if (res.source === 'docx' || res.source === 'doc') {
+    input.value = res.text;
+    update();
+    showToast('已把 Word 文档 ' + name + ' 反向转换为 Markdown ✅', true);
+  } else if (res.kind === 'latex') {
+    applyTex(res.text, name);
+  } else {
+    input.value = res.text;
+    update();
+    showToast('已识别为 Markdown：' + name, true);
+  }
+
+  const sel = document.getElementById('exportFormat');
+  if (sel) sel.value = window.docxread.recommendFormat(res.kind);
+  if (res.warnings && res.warnings.length) console.warn('[导入提示] ' + name, res.warnings);
+  preview.scrollTop = 0;
+}
+
+/* 主进程返回的是 base64 字节流（.docx 是二进制，不能按文本读） */
+function bytesFromBase64(b64) {
+  const bin = atob(String(b64 || ''));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function importFile() {
+  if (!window.docxread) { showToast('文件解析模块未加载'); return; }
+  if (!window.desktopAPI || !window.desktopAPI.openFile) {
+    showToast('请直接把文件拖进窗口（支持 .md / .txt / .tex / .docx / .doc）');
     return;
   }
-  const res = await window.desktopAPI.openTex();
+  const res = await window.desktopAPI.openFile();
   if (!res.opened) return;
-  applyTex(res.text, res.path.split(/[\\/]/).pop());
+  await applyFile(res.path.split(/[\\/]/).pop(), bytesFromBase64(res.bytes));
 }
 
-/* 内容嗅探：扩展名不可靠时（.txt / 无扩展名）用特征判断 */
-function looksLikeLatex(text) {
-  return /\\documentclass\b/.test(text)
-    || /\\begin\s*\{(document|itemize|enumerate|tabular|equation|align|figure|table|abstract)\}/.test(text)
-    || /\\(?:section|subsection|textbf|emph|includegraphics)\s*\{/.test(text);
-}
-
-function sniffKind(name, text) {
-  const ext = ((name.match(/\.([a-z0-9]+)$/i) || [])[1] || '').toLowerCase();
-  if (['tex', 'latex'].indexOf(ext) >= 0) return 'latex';
-  if (['md', 'markdown', 'mdx'].indexOf(ext) >= 0) return 'markdown';
-  return looksLikeLatex(text) ? 'latex' : 'markdown';
-}
-
-/* 拖入文件：自动识别类型并选择转换方向。
-   文件读取走渲染进程 File API（file.text()），不经过主进程。 */
+/* 拖入文件：读成字节流（.docx 是二进制包，用 file.text() 会读坏） */
 function setupDrag() {
   let depth = 0;
   document.addEventListener('dragenter', function (e) {
@@ -684,24 +705,16 @@ function setupDrag() {
     document.body.classList.remove('dragging');
     const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (!file) return;
-    let text = '';
-    try { text = await file.text(); } catch (err) { showToast('读取文件失败：' + err.message); return; }
-    if (!text.trim()) { showToast('文件是空的'); return; }
-    const kind = sniffKind(file.name, text);
-    if (kind === 'latex') {
-      applyTex(text, file.name);
-    } else {
-      input.value = text;
-      update();
-      showToast('已识别为 Markdown：' + file.name + '（可导出 Word / .doc / .tex）', true);
-    }
-    preview.scrollTop = 0;
+    let bytes;
+    try { bytes = new Uint8Array(await file.arrayBuffer()); }
+    catch (err) { showToast('读取文件失败：' + err.message); return; }
+    await applyFile(file.name, bytes);
   });
 }
 
 document.getElementById('btnCopy').addEventListener('click', copyRich);
 document.getElementById('btnExportWord').addEventListener('click', exportWord);
-document.getElementById('btnImportTex').addEventListener('click', importTex);
+document.getElementById('btnImportFile').addEventListener('click', importFile);
 document.getElementById('btnCopyPlain').addEventListener('click', copyPlain);
 document.getElementById('btnClear').addEventListener('click', function () { input.value = ''; update(); });
 document.getElementById('btnExample').addEventListener('click', function () { input.value = SAMPLE; update(); preview.scrollTop = 0; showToast('已插入示例', true); });

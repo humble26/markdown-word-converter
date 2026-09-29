@@ -5,5 +5,5 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   saveDoc: (filename, html) => ipcRenderer.invoke('save-doc', { filename, html }),
   saveDocx: (filename, base64) => ipcRenderer.invoke('save-docx', { filename, base64 }),
   saveText: (filename, content) => ipcRenderer.invoke('save-text', { filename, content }),
-  openTex: () => ipcRenderer.invoke('open-tex')
+  openFile: () => ipcRenderer.invoke('open-file')
 });

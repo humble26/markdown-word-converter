@@ -101,8 +101,8 @@ test('IPC：缺少 senderFrame 时按不可信处理', async () => {
   assert.strictEqual(captured.clipboardWrites.length, before, '不应写入剪贴板');
 });
 
-test('IPC：三个通道都已包装来源校验', () => {
-  for (const name of ['copy-rich', 'save-doc', 'save-docx']) {
+test('IPC：所有桌面能力通道都已包装来源校验', () => {
+  for (const name of ['copy-rich', 'save-doc', 'save-docx', 'save-text', 'open-file']) {
     assert.ok(captured.handlers.has(name), `${name} 应已注册`);
   }
 });
